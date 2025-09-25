@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BacaNicE</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial;
+      padding:20px;
+      background:#111; 
+      color:#eee;
+    }
+    h1 { font-size:18px; margin-bottom:10px; color:#fff; }
+    .controls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; }
+
+    button {
+      padding:8px 14px;
+      border-radius:8px;
+      border:none;
+      cursor:pointer;
+      font-weight:600;
+      color:#fff;
+      transition:all 0.2s ease;
+    }
+    button:active { transform:scale(0.95); }
+
+    /* ปุ่มสี */
+    #btnB { background:#d32f2f; } /* Red */
+    #btnP { background:#1976d2; } /* Blue */
+    #btnT { background:#388e3c; } /* Green */
+    #btnCopy { background:#9c27b0; } /* Purple */
+    #btnUndo { background:#607d8b; } /* Gray Blue */
+    #btnReset { background:#555; } 
+    #openChat { background:#ff9800; } /* Orange */
+
+    #gridWrap { overflow:auto; border:1px solid #333; padding:8px; background:#1a1a1a; width:100%; max-width:1000px; border-radius:8px; }
+    table { border-collapse:collapse; }
+
+    td {
+      width:44px; height:36px; text-align:center; vertical-align:middle;
+      border:1px solid #333;
+      font-weight:700; font-size:16px; 
+      color:#eee;
+      background:#222;
+      border-radius:4px;
+    }
+
+    td.empty { color:#444; background:#181818; }
+
+    /* สีตัวอักษร */
+    .cell-B { color:#ff5252; }
+    .cell-P { color:#42a5f5; }
+    .cell-T { color:#66bb6a; }
+
+    .info { margin-top:10px; color:#aaa; font-size:13px; }
+    .small { font-size:12px; color:#888; margin-left:8px; }
+  </style>
+</head>
+<body>
+  <h1>ตารางบันทึกผล (B / P / T)</h1>
+
+  <div class="controls">
+    <button id="btnB">Banker (B)</button>
+    <button id="btnP">Player (P)</button>
+    <button id="btnT">Tie (T)</button>
+    <button id="btnUndo">Undo</button>
+    <button id="btnCopy">คัดลอกข้อความ</button>
+    <button id="btnReset">รีเซ็ต</button>
+    <button id="openChat">เปิดแชท (Popup)</button>
+    <span class="small">คอลัมน์สูงสุด 16, แถวสูงสุด 6</span>
+  </div>
+
+  <div id="gridWrap">
+    <table id="board" aria-label="ตารางผล">
+      <!-- สร้างโดย JS -->
+    </table>
+  </div>
+
+  <div class="info" id="status">สถานะ: พร้อมใช้งาน</div>
+
+<script>
+(function(){
+  const ROWS = 20;
+  const COLS = 30;
+  const board = document.getElementById('board');
+  const status = document.getElementById('status');
+
+  const cells = [];
+  for (let r=0; r<ROWS; r++){
+    const tr = document.createElement('tr');
+    const rowArr = [];
+    for (let c=0; c<COLS; c++){
+      const td = document.createElement('td');
+      td.classList.add('empty');
+      td.textContent = '';
+      tr.appendChild(td);
+      rowArr.push(td);
+    }
+    board.appendChild(tr);
+    cells.push(rowArr);
+  }
+
+  let lastValue = null;
+  let currentCol = 0;
+  let currentRow = -1;
+  let filledCount = 0;
+  const history = []; // เก็บประวัติการกด
+
+  function findNextEmptyRowInCol(col){
+    for (let r=0; r<ROWS; r++){
+      if (cells[r][col].textContent === '') return r;
+    }
+    return -1;
+  }
+
+  function placeValue(val){
+    if (filledCount >= ROWS * COLS){
+      status.textContent = 'สถานะ: ตารางเต็มแล้ว';
+      return;
+    }
+
+    if (lastValue === null){
+      currentCol = 0;
+      currentRow = findNextEmptyRowInCol(currentCol);
+      if (currentRow === -1) {
+        currentCol++;
+        currentRow = findNextEmptyRowInCol(currentCol);
+      }
+    } else {
+      if (val === lastValue || val === 'T') {
+        let nextRow = -1;
+        for (let r = (currentRow+1); r < ROWS; r++){
+          if (cells[r][currentCol].textContent === '') { nextRow = r; break; }
+        }
+        if (nextRow === -1) {
+          let found = false;
+          for (let c = currentCol + 1; c < COLS; c++){
+            const r0 = findNextEmptyRowInCol(c);
+            if (r0 !== -1) { currentCol = c; currentRow = r0; found = true; break; }
+          }
+          if (!found) { status.textContent = 'สถานะ: ไม่พบตำแหน่งว่าง'; return; }
+        } else {
+          currentRow = nextRow;
+        }
+      } else {
+        let found = false;
+        for (let c = currentCol + 1; c < COLS; c++){
+          const r0 = findNextEmptyRowInCol(c);
+          if (r0 !== -1) { currentCol = c; currentRow = r0; found = true; break; }
+        }
+        if (!found){
+          status.textContent = 'สถานะ: ตารางเต็มหรือไม่พบคอลัมน์ว่าง';
+          return;
+        }
+      }
+    }
+
+    const cell = cells[currentRow][currentCol];
+    cell.textContent = val;
+    cell.className = '';
+    cell.classList.add('cell-' + val);
+
+    history.push({row: currentRow, col: currentCol, value: val}); // บันทึก
+
+    lastValue = val;
+    filledCount++;
+    status.textContent = `สถานะ: วาง '${val}' ที่ คอลัมน์ ${currentCol+1} แถว ${currentRow+1}`;
+  }
+
+  // ปุ่ม Undo
+  function undoLast(){
+    if (history.length === 0){
+      status.textContent = 'สถานะ: ไม่มีข้อมูลให้ Undo';
+      return;
+    }
+    const last = history.pop();
+    const cell = cells[last.row][last.col];
+    cell.textContent = '';
+    cell.className = 'empty';
+    filledCount--;
+
+    // หา lastValue ใหม่
+    if (history.length > 0){
+      lastValue = history[history.length-1].value;
+      currentRow = history[history.length-1].row;
+      currentCol = history[history.length-1].col;
+    } else {
+      lastValue = null;
+      currentRow = -1;
+      currentCol = 0;
+    }
+
+    status.textContent = `สถานะ: ยกเลิก '${last.value}' ที่ คอลัมน์ ${last.col+1} แถว ${last.row+1}`;
+  }
+
+  document.getElementById('btnB').addEventListener('click', ()=> placeValue('B'));
+  document.getElementById('btnP').addEventListener('click', ()=> placeValue('P'));
+  document.getElementById('btnT').addEventListener('click', ()=> placeValue('T'));
+  document.getElementById('btnUndo').addEventListener('click', undoLast);
+
+  document.getElementById('btnReset').addEventListener('click', ()=>{
+    for (let r=0;r<ROWS;r++){
+      for (let c=0;c<COLS;c++){
+        cells[r][c].textContent = '';
+        cells[r][c].className = 'empty';
+      }
+    }
+    lastValue = null; currentCol = 0; currentRow = -1; filledCount = 0;
+    history.length = 0;
+    status.textContent = 'สถานะ: รีเซ็ตเสร็จแล้ว';
+  });
+
+  document.getElementById('btnCopy').addEventListener('click', async ()=>{
+    const results = [];
+    let count = 1;
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        const t = cells[r][c].textContent;
+        if (t !== '') {
+          results.push(`ตาที่${count} ${t}`);
+          count++;
+        }
+      }
+    }
+    results.push("จงหาผลลัพท์ในตาต่อไป ตอบเเค่ Player หรือ Banker หรือ Tie");
+    const output = results.join('\n');
+    try {
+      await navigator.clipboard.writeText(output);
+      status.textContent = 'สถานะ: คัดลอกเรียบร้อยแล้ว';
+      alert('คัดลอกเรียบร้อย\n(ดูได้ในคลิปบอร์ด)');
+    } catch (err){
+      const ta = document.createElement('textarea');
+      ta.value = output;
+      document.body.appendChild(ta);
+      ta.select();
+      try { 
+        document.execCommand('copy'); 
+        alert('คัดลอกเรียบร้อย (fallback)'); 
+        status.textContent='สถานะ: คัดลอกแบบ fallback เสร็จ'; 
+      }
+      catch(e){ 
+        prompt('คัดลอกข้อความนี้ (Ctrl+C, Enter):', output); 
+        status.textContent='สถานะ: โปรดคัดลอกด้วยตนเอง'; 
+      }
+      ta.remove();
+    }
+  });
+
+  document.getElementById('openChat').addEventListener('click', function () {
+    window.open(
+      'https://chatgpt.com/g/g-Yp2norQHd-baccarat-trend-analyzer',
+      'chatPopup',
+      'toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=420,height=700'
+    );
+  });
+
+})();
+</script>
+</body>
+</html>
